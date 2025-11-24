@@ -52,12 +52,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. 취소 가능 여부 검증
-    // 3-1. payment 테이블 목록 조회
+    // 3-1. payment 테이블 목록 조회 (status가 'Paid'인 것만)
     const { data: payments, error: paymentError } = await supabase
       .from('payment')
       .select('*')
       .eq('user_id', user.id)
-      .eq('transactionKey', transactionKey);
+      .eq('transaction_key', transactionKey)
+      .eq('status', 'Paid')
+      .order('created_at', { ascending: false });
 
     if (paymentError) {
       console.error("Payment 조회 오류:", paymentError);
@@ -108,7 +110,42 @@ export async function POST(request: NextRequest) {
 
     console.log("결제 취소 성공:", cancelResult);
 
-    // 6. 성공 응답 반환 (DB에 저장하지 않음)
+    // 6. Supabase payment 테이블에 취소 레코드 저장
+    try {
+      // 6-1. 가장 최근의 Paid 상태 결제 정보 (이미 쿼리에서 필터링됨)
+      const paidPayment = payments[0];
+      
+      if (paidPayment) {
+        console.log('Supabase에 취소 정보 저장 중...');
+        const { data: cancelRecord, error: cancelInsertError } = await supabase
+          .from('payment')
+          .insert({
+            transaction_key: paidPayment.transaction_key,
+            amount: -paidPayment.amount, // 음수로 저장
+            status: 'Cancel',
+            start_at: paidPayment.start_at,
+            end_at: paidPayment.end_at,
+            end_grace_at: paidPayment.end_grace_at,
+            next_schedule_at: paidPayment.next_schedule_at,
+            next_schedule_id: paidPayment.next_schedule_id,
+            user_id: paidPayment.user_id,
+          })
+          .select()
+          .single();
+
+        if (cancelInsertError) {
+          console.error('Supabase 취소 정보 저장 실패:', cancelInsertError);
+          // 저장 실패는 로그만 남기고 성공 응답 반환 (결제 취소는 성공했으므로)
+        } else {
+          console.log('Supabase 취소 정보 저장 성공:', cancelRecord);
+        }
+      }
+    } catch (dbError) {
+      console.error("DB 저장 중 오류 발생:", dbError);
+      // DB 저장 실패는 로그만 남기고 성공 응답 반환 (결제 취소는 성공했으므로)
+    }
+
+    // 7. 성공 응답 반환
     return NextResponse.json({
       success: true,
     });
