@@ -67,6 +67,11 @@ export const usePayment = () => {
       }
 
       // 6. 빌링키로 결제 API 요청
+      console.log("결제 API 요청 시작:", {
+        billingKey: issueResponse.billingKey,
+        userId: user.id,
+      });
+
       const paymentApiResponse = await fetch("/api/payments", {
         method: "POST",
         headers: {
@@ -84,9 +89,22 @@ export const usePayment = () => {
       });
 
       const paymentResult = await paymentApiResponse.json();
+      console.log("결제 API 응답:", paymentResult);
 
-      // 7. 결제 실패 처리
+      // 7. HTTP 상태 코드 확인
+      if (!paymentApiResponse.ok) {
+        console.error("결제 API HTTP 오류:", paymentApiResponse.status, paymentResult);
+        alert(
+          `결제에 실패했습니다: ${
+            paymentResult.error || `HTTP ${paymentApiResponse.status} 오류`
+          }`
+        );
+        return;
+      }
+
+      // 8. 결제 실패 처리
       if (!paymentResult.success) {
+        console.error("결제 실패:", paymentResult);
         alert(
           `결제에 실패했습니다: ${
             paymentResult.error || "알 수 없는 오류"
@@ -95,7 +113,8 @@ export const usePayment = () => {
         return;
       }
 
-      // 8. 결제 성공 처리
+      // 9. 결제 성공 처리
+      console.log("결제 성공:", paymentResult);
       alert("구독에 성공하였습니다.");
       router.push("/magazines");
     } catch (error) {

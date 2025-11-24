@@ -83,22 +83,37 @@ export async function POST(request: NextRequest) {
 
     // 7. PortOne 응답 확인
     const paymentResult = await paymentResponse.json();
+    
+    console.log("PortOne 결제 API 응답:", {
+      status: paymentResponse.status,
+      ok: paymentResponse.ok,
+      result: paymentResult
+    });
 
     if (!paymentResponse.ok) {
       console.error("PortOne 결제 실패:", paymentResult);
       return NextResponse.json(
         {
           success: false,
-          error: "결제 처리 중 오류가 발생했습니다.",
+          error: paymentResult.message || "결제 처리 중 오류가 발생했습니다.",
           details: paymentResult,
         },
         { status: paymentResponse.status }
       );
     }
 
-    // 8. 성공 응답 반환 (DB에 저장하지 않음)
+    // 8. PortOne 응답에서 결제 상태 확인
+    // PortOne v2 API는 결제가 즉시 완료되지 않을 수 있으므로 상태 확인
+    if (paymentResult.status && paymentResult.status !== 'PAID') {
+      console.warn("결제 상태가 PAID가 아닙니다:", paymentResult.status);
+      // 상태가 PAID가 아니어도 성공으로 처리 (웹훅에서 처리)
+    }
+
+    // 9. 성공 응답 반환 (DB에 저장하지 않음, 웹훅에서 처리)
     return NextResponse.json({
       success: true,
+      paymentId: paymentResult.id || paymentId,
+      status: paymentResult.status,
     });
   } catch (error) {
     console.error("API 처리 중 오류:", error);
