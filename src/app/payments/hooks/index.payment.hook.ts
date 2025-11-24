@@ -66,17 +66,29 @@ export const usePayment = () => {
         return;
       }
 
-      // 6. 빌링키로 결제 API 요청
+      // 6. 액세스 토큰 가져오기 (서버 사이드 인증용)
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      // 7. 빌링키로 결제 API 요청
       console.log("결제 API 요청 시작:", {
         billingKey: issueResponse.billingKey,
         userId: user.id,
+        hasToken: !!accessToken,
       });
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      // 액세스 토큰이 있으면 헤더에 추가
+      if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`;
+      }
 
       const paymentApiResponse = await fetch("/api/payments", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           billingKey: issueResponse.billingKey,
           orderName: "IT 매거진 월간 구독",

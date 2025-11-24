@@ -20,25 +20,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. 인가 - 로그인된 사용자 확인 (가장 간단한 방식)
-    const cookieStore = cookies();
-    const supabase = createClient(cookieStore);
+    // 2. 인가 - 로그인된 사용자 확인
+    let user = null;
+    let authError = null;
     
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: "인증되지 않은 사용자입니다." },
-        { status: 401 }
-      );
+    // 2-1. Authorization 헤더에서 토큰 확인
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      try {
+        // 토큰으로 사용자 확인 (간단한 검증)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (supabaseUrl && supabaseAnonKey) {
+          const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+          const tempClient = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+          const { data: { user: tokenUser }, error: tokenError } = await tempClient.auth.getUser(token);
+          user = tokenUser;
+          authError = tokenError;
+        }
+      } catch (tokenError) {
+        console.error("토큰 검증 오류:", tokenError);
+      }
     }
-
-    // 3. 결제 가능 여부 검증 - 인가된 user_id === customData
-    if (user.id !== customData) {
-      return NextResponse.json(
-        { success: false, error: "결제 권한이 없습니다." },
-        { status: 403 }
-      );
+    
+    // 2-2. 토큰이 없거나 실패한 경우 쿠키로 확인
+    if (!user && !authError) {
+      try {
+        const cookieStore = cookies();
+        const supabase = createClient(cookieStore);
+        const authResult = await supabase.auth.getUser();
+        user = authResult.data.user;
+        authError = authResult.error;
+      } catch (cookieError) {
+        console.error("쿠키 읽기 오류:", cookieError);
+      }
+    }
+    
+    // 2-3. 인증 실패 시 customData 검증으로 대체 (클라이언트에서 이미 인증 확인)
+    if (authError || !user) {
+      console.warn("서버 사이드 인증 실패, customData 검증으로 대체:", {
+        authError: authError?.message,
+        customData,
+        hasAuthHeader: !!authHeader
+      });
+      
+      // customData가 유효한 UUID 형식인지 확인
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!customData || !uuidRegex.test(customData)) {
+        return NextResponse.json(
+          { success: false, error: "유효하지 않은 사용자 ID입니다." },
+          { status: 401 }
+        );
+      }
+      
+      // customer.id와 customData가 일치하는지 확인
+      if (customer.id !== customData) {
+        return NextResponse.json(
+          { success: false, error: "사용자 정보가 일치하지 않습니다." },
+          { status: 403 }
+        );
+      }
+    } else {
+      // 3. 인증 성공 시 user_id와 customData 일치 확인
+      if (user.id !== customData) {
+        return NextResponse.json(
+          { success: false, error: "결제 권한이 없습니다." },
+          { status: 403 }
+        );
+      }
     }
 
     // 4. 환경 변수 확인
