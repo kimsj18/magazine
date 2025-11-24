@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, Magazine } from '@/lib/supabase';
 
 interface SubmitData {
   category: string;
@@ -73,19 +73,19 @@ export const useSubmitMagazine = () => {
       }
 
       // Step 2: magazine 테이블에 데이터 등록
+      const insertData = {
+        category: data.category,
+        title: data.title,
+        description: data.description,
+        content: data.content,
+        tags: data.tags,
+        image_url: imageUrl,
+        user_id: userId
+      };
+      
       const { data: insertedData, error: insertError } = await supabase
         .from('magazine')
-        .insert([
-          {
-            category: data.category,
-            title: data.title,
-            description: data.description,
-            content: data.content,
-            tags: data.tags,
-            image_url: imageUrl,
-            user_id: userId
-          }
-        ])
+        .insert([insertData] as never)
         .select()
         .single();
 
@@ -98,7 +98,8 @@ export const useSubmitMagazine = () => {
       }
 
       // Step 3: 등록 성공 - 생성된 ID 반환
-      return insertedData.id;
+      const magazineData = insertedData as Magazine & { id: string };
+      return magazineData.id;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
       setError(errorMessage);

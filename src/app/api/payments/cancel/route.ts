@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createServiceClient } from "@/lib/supabase";
 
 /**
  * POST /api/payments/cancel
@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
 
     const accessToken = authHeader.replace('Bearer ', '');
 
-    // 2-1. Supabase 사용자 인증 확인
+    // 2-1. Supabase 클라이언트 생성 및 사용자 인증 확인
+    const supabase = createServiceClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
     
     if (authError || !user) {
