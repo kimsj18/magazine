@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase";
 import { cookies } from "next/headers";
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 /**
  * POST /api/payments
@@ -160,7 +162,71 @@ export async function POST(request: NextRequest) {
       // 상태가 PAID가 아니어도 성공으로 처리 (웹훅에서 처리)
     }
 
-    // 9. 성공 응답 반환 (DB에 저장하지 않음, 웹훅에서 처리)
+    // 9. Supabase payment 테이블에 결제 정보 저장
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseServiceKey) {
+        console.error("Supabase 환경 변수가 설정되지 않았습니다.");
+        // 환경 변수가 없어도 결제는 성공했으므로 성공 응답 반환
+      } else {
+        const supabase = createSupabaseClient(supabaseUrl, supabaseServiceKey);
+        
+        // 9-1. 날짜 계산
+        const now = new Date();
+        const startAt = now.toISOString();
+        
+        const endAt = new Date(now);
+        endAt.setDate(endAt.getDate() + 30);
+        
+        const endGraceAt = new Date(now);
+        endGraceAt.setDate(endGraceAt.getDate() + 31);
+        
+        // next_schedule_at: end_at + 1일 오전 10시~11시 사이 임의 시각
+        const nextScheduleAt = new Date(endAt);
+        nextScheduleAt.setDate(nextScheduleAt.getDate() + 1);
+        nextScheduleAt.setHours(10, Math.floor(Math.random() * 60), 0, 0); // 10시 00분 ~ 10시 59분
+        
+        const nextScheduleId = randomUUID();
+        const finalPaymentId = paymentResult.id || paymentId;
+
+        // 9-2. Supabase payment 테이블에 저장
+        console.log('Supabase에 결제 정보 저장 중...', {
+          transaction_key: finalPaymentId,
+          user_id: customData,
+          amount: amount,
+        });
+
+        const { data: paymentRecord, error: insertError } = await supabase
+          .from('payment')
+          .insert({
+            transaction_key: finalPaymentId,
+            amount: amount,
+            status: 'Paid',
+            start_at: startAt,
+            end_at: endAt.toISOString(),
+            end_grace_at: endGraceAt.toISOString(),
+            next_schedule_at: nextScheduleAt.toISOString(),
+            next_schedule_id: nextScheduleId,
+            user_id: customData,
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Supabase 저장 실패:', insertError);
+          // 저장 실패는 로그만 남기고 성공 응답 반환 (결제는 성공했으므로)
+        } else {
+          console.log('Supabase 저장 성공:', paymentRecord);
+        }
+      }
+    } catch (dbError) {
+      console.error("DB 저장 중 오류 발생:", dbError);
+      // DB 저장 실패는 로그만 남기고 성공 응답 반환 (결제는 성공했으므로)
+    }
+
+    // 10. 성공 응답 반환
     return NextResponse.json({
       success: true,
       paymentId: paymentResult.id || paymentId,
