@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { LogIn, LogOut, PenSquare, Sparkles, User } from "lucide-react";
 import { useMagazines } from './index.binding.hook';
 import { useLoginLogoutStatus } from './index.login.logout.status.hook';
+import { useGuardAuth } from './index.guard.auth.hook';
+import { useGuardSubscribe } from './index.guard.subscribe.hook';
 
 const getCategoryColor = (category: string) => {
   const colorMap: Record<string, string> = {
@@ -31,9 +33,19 @@ export default function GlossaryCards() {
     handleLogout, 
     handleMyPage 
   } = useLoginLogoutStatus();
+  const { checkAuthAndExecute } = useGuardAuth();
+  const { checkSubscribeAndExecute } = useGuardSubscribe();
 
   const handleCardClick = (id: string) => {
-    router.push(`/magazines/${id}`);
+    checkSubscribeAndExecute(() => {
+      router.push(`/magazines/${id}`);
+    });
+  };
+
+  const handleSubscribe = () => {
+    checkAuthAndExecute(() => {
+      router.push('/payments');
+    });
   };
 
   return (
@@ -95,14 +107,18 @@ export default function GlossaryCards() {
               )}
               <button 
                 className="magazine-header-button magazine-header-button-primary"
-                onClick={() => router.push('/magazines/new')}
+                onClick={() => {
+                  checkSubscribeAndExecute(() => {
+                    router.push('/magazines/new');
+                  });
+                }}
               >
                 <PenSquare className="magazine-button-icon" />
                 <span className="magazine-button-text">글쓰기</span>
               </button>
               <button 
                 className="magazine-header-button magazine-header-button-payment"
-                onClick={() => router.push('/payments')}
+                onClick={handleSubscribe}
               >
                 <Sparkles className="magazine-button-icon" />
                 <span className="magazine-button-text">구독하기</span>

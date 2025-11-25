@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from "lucide-react";
 import { useMagazineDetail } from "./hooks/index.func.binding";
+import { useGuardSubscribe } from '../index.guard.subscribe.hook';
 
 const getCategoryColor = (category: string) => {
   const colorMap: Record<string, string> = {
@@ -25,11 +28,29 @@ interface PageProps {
 }
 
 export default function GlossaryCardsDetail({ params }: PageProps) {
+  const router = useRouter();
   const { magazine, loading, error } = useMagazineDetail(params.id);
+  const { checkSubscription } = useGuardSubscribe();
 
   const onNavigateToList = () => {
     window.location.href = '/magazines';
   };
+
+  // 페이지 로드 시 구독 상태 확인
+  useEffect(() => {
+    const verifySubscription = async () => {
+      // 매거진 데이터 로딩이 완료된 후에만 구독 확인
+      if (!loading && magazine) {
+        const isSubscribed = await checkSubscription();
+        if (!isSubscribed) {
+          alert('구독 후 이용 가능합니다.');
+          router.push('/magazines');
+        }
+      }
+    };
+
+    verifySubscription();
+  }, [loading, magazine, checkSubscription, router]);
 
   if (loading) {
     return (
