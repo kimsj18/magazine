@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -9,14 +8,12 @@ import { supabase } from '@/lib/supabase';
  * 로그인 여부를 검사하고, 비로그인시 알림을 띄우고 작업을 중단합니다.
  */
 export const useGuardAuth = () => {
-  const router = useRouter();
-
   /**
    * 로그인 여부를 검사하고, 비로그인시 알림을 띄우고 작업을 중단합니다.
    * @param action 로그인 상태일 때 실행할 액션 함수
    * @returns guard된 액션 함수
    */
-  const guardAction = useCallback(async <T extends (...args: any[]) => any>(
+  const guardAction = useCallback(async <T extends (...args: unknown[]) => unknown>(
     action: T
   ): Promise<ReturnType<T> | void> => {
     try {
@@ -36,7 +33,7 @@ export const useGuardAuth = () => {
       }
 
       // 로그인 상태일 때 액션 실행
-      return await action();
+      return (await action()) as ReturnType<T>;
     } catch (err) {
       console.error('Guard 인증 오류:', err);
       alert('로그인 후 이용 가능합니다');
